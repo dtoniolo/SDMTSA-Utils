@@ -8,7 +8,8 @@ import scipy
 import scipy.stats
 
 
-def plot_ts(timeseries, lags, alpha=0.05, ci=False):
+def plot_ts(timeseries, lags, alpha=0.05, ci=False, title='', xaxis_title='',
+            yaxis_title=''):
     """Plots the timeseries and its ACF and PACF using plotly.
 
     Parameters
@@ -26,12 +27,18 @@ def plot_ts(timeseries, lags, alpha=0.05, ci=False):
         Bartlett’s formula. If None, no confidence intervals are plotted.
     ci : bool
         Useful when plotting the residuals of a time series. Overlays to the
-        time series the std centered around zero
+        time series the std centered around zero.
+    title : string
+        The plot title.
+    xaxis_title : string
+        The x axis title.
+    yaxis_title : string
+        The y axis title.
 
     Returns
     -------
     fig : plotly figure
-        The figure containing the three plots
+        The figure containing the three plots.
 
     """
     # create subplots
@@ -58,8 +65,8 @@ def plot_ts(timeseries, lags, alpha=0.05, ci=False):
         comp_index = np.concatenate((index, index[::-1]))
         ci = np.concatenate((low_ci, high_ci))
         # build plot trace
-        name = 'Intervallo di confidenza centrato in 0 al livello di' + \
-               ' confidenza del {}%'.format(100*(1-alpha))
+        name = 'Confidence interval centered in 0 at the ' + \
+               '{}% confidence level'.format(100*(1-alpha))
         fig.add_trace(go.Scatter(x=comp_index, y=ci, name=name,
                       fill='toself', opacity=0.5), row=1, col=1)
 
@@ -75,7 +82,7 @@ def plot_ts(timeseries, lags, alpha=0.05, ci=False):
                   row=2, col=1)
     comp_index = np.concatenate((index, index[::-1]))
     ci_y = np.concatenate((ci[::, 0], ci[::-1, 1]))
-    name = 'ACF Intervallo di Confidenza al {}%'.format(100*(1-alpha))
+    name = 'ACF Confidence interval at {}%'.format(100*(1-alpha))
     fig.add_trace(go.Scatter(x=comp_index, y=ci_y, fill='toself', opacity=0.5,
                              name=name), row=2, col=1)
 
@@ -93,11 +100,17 @@ def plot_ts(timeseries, lags, alpha=0.05, ci=False):
     fig.add_trace(go.Scatter(x=comp_index, y=ci_y, fill='toself', opacity=0.5,
                              name=name), row=3, col=1)
     fig.update_layout(height=900)
+
+    # final layout changes
+    fig.update_layout(title={'text': title, 'x': 0.5, 'xanchor': 'center'})
+    fig.update_xaxes(title=xaxis_title)
+    fig.update_yaxes(title=yaxis_title)
     return fig
 
 
-def make_and_plot_predictions(fitted_mod, start_index=0, alpha=0.95, title='',
-                              xaxis_title='', yaxis_title=''):
+def make_and_plot_predictions(fitted_mod, start_index=0, end_index=None,
+                              alpha=0.95, title='', xaxis_title='',
+                              yaxis_title=''):
     """Plots one step ahead predictions for an univariate time series model.
 
     Parameters
@@ -105,8 +118,11 @@ def make_and_plot_predictions(fitted_mod, start_index=0, alpha=0.95, title='',
     fitted_mod : time series fitted model
         Must include all the data, train and test. To do this, create a model
         on a subset, fit it, and then add test data without fitting
-    start_index : int
+    start_index : natural number
         Zero indexed position at which to start the one step ahead predictions.
+    end_index : int
+        Optional. Zero indexed position at which to end the one step ahead
+        predictions.
     alpha : real number in [0, 1)
         The probability amplitude of the confidence interval.
     title : string
@@ -123,7 +139,10 @@ def make_and_plot_predictions(fitted_mod, start_index=0, alpha=0.95, title='',
 
     """
     # making predictions
-    pred = fitted_mod.get_prediction(start=start_index)
+    if end_index is not None:
+        pred = fitted_mod.get_prediction(start=start_index, end=end_index)
+    else:
+        pred = fitted_mod.get_prediction(start=start_index)
     pred_mean = pred.predicted_mean
     conf_int = pred.conf_int(alpha=alpha)
 
@@ -132,16 +151,18 @@ def make_and_plot_predictions(fitted_mod, start_index=0, alpha=0.95, title='',
     data = fitted_mod.data.endog
     index = fitted_mod.data.dates
     # displaying the test data
-    fig.add_trace(go.Scatter(x=index, y=data[start_index:], name='Osservate'))
+    fig.add_trace(go.Scatter(x=index, y=data, name='Data'))
     # displaying the predictions
     fig.add_trace(go.Scatter(x=pred_mean.index, y=pred_mean.values,
-                             name='Stimate', line={'color': '#E83D2E'}))
+                             name='Estimates', line={'color': '#E83D2E'},
+                             legendgroup='Estimates'))
     # displaying the confidence interval and building the necessary objects
     conf_int_shape = pd.concat((conf_int.iloc[:, 0], conf_int.iloc[::-1, 1]))
-    name = 'Intervallo di confidenza al {}%'.format(100*alpha)
+    name = 'Confidence interval at {}%'.format(100*alpha)
     fig.add_trace(go.Scatter(x=conf_int_shape.index, y=conf_int_shape.values,
                              fill='toself', name=name, opacity=0.5,
-                             line={'color': '#E83D2E'}))
+                             line={'color': '#E83D2E'},
+                             legendgroup='Estimates'))
     # final layout changes
     fig.update_layout(title={'text': title, 'x': 0.5, 'xanchor': 'center'})
     fig.update_xaxes(title=xaxis_title)
@@ -149,7 +170,9 @@ def make_and_plot_predictions(fitted_mod, start_index=0, alpha=0.95, title='',
     return fig
 
 
-def plot_already_made_predictions(orig_data, pred_mean, conf_int, alpha):
+def plot_already_made_predictions(orig_data, pred_mean, conf_int=None,
+                                  alpha=None, title='', xaxis_title='',
+                                  yaxis_title=''):
     """Plots already made predictions against the original data.
 
 
@@ -165,6 +188,12 @@ def plot_already_made_predictions(orig_data, pred_mean, conf_int, alpha):
     alpha : real number in (0, 1]
         The alpha used to compute conf_int. Will be used only for the conf_int
         trace name.
+    title : string
+        The plot title.
+    xaxis_title : string
+        The x axis title.
+    yaxis_title : string
+        The y axis title.
 
     Returns
     -------
@@ -175,14 +204,22 @@ def plot_already_made_predictions(orig_data, pred_mean, conf_int, alpha):
     fig = go.Figure()
     # displaying the test data
     fig.add_trace(go.Scatter(x=orig_data.index, y=orig_data.values,
-                             name='Osservate'))
+                             name='Data'))
     # displaying the predictions
     fig.add_trace(go.Scatter(x=pred_mean.index, y=pred_mean.values,
-                             name='Stimate', line={'color': '#E83D2E'}))
+                             name='Estimates', line={'color': '#E83D2E'}))
     # displaying the confidence interval and building the necessary objects
-    conf_int_shape = pd.concat((conf_int.iloc[:, 0], conf_int.iloc[::-1, 1]))
-    name = 'Intervallo di confidenza al {}%'.format(100*alpha)
-    fig.add_trace(go.Scatter(x=conf_int_shape.index, y=conf_int_shape.values,
-                             fill='toself', name=name, opacity=0.5,
-                             line={'color': '#E83D2E'}))
+    if conf_int is not None:
+        conf_int_shape = pd.concat((conf_int.iloc[:, 0],
+                                    conf_int.iloc[::-1, 1]))
+        name = 'Confidence interval at {}%'.format(100*alpha)
+        fig.add_trace(go.Scatter(x=conf_int_shape.index,
+                                 y=conf_int_shape.values,
+                                 fill='toself', name=name, opacity=0.5,
+                                 line={'color': '#E83D2E'}))
+
+    # final layout changes
+    fig.update_layout(title={'text': title, 'x': 0.5, 'xanchor': 'center'})
+    fig.update_xaxes(title=xaxis_title)
+    fig.update_yaxes(title=yaxis_title)
     return fig
