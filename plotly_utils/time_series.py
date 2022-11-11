@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Optional
 import numpy as np
 from numpy.typing import ArrayLike
 import pandas as pd
@@ -186,14 +186,14 @@ def make_and_plot_predictions(
 
 
 def plot_already_made_predictions(
-    orig_data,
-    pred_mean,
-    conf_int=None,
-    alpha=None,
-    title="",
-    xaxis_title="",
-    yaxis_title="",
-):
+    orig_data: pd.Series,
+    pred_mean: pd.Series,
+    conf_int: Optional[pd.DataFrame] = None,
+    alpha: Optional[float] = None,
+    title: str = "",
+    xaxis_title: str = "",
+    yaxis_title: str = "",
+) -> go.Figure:
     """Plots already made predictions against the original data.
 
 
@@ -203,18 +203,18 @@ def plot_already_made_predictions(
         The original data series.
     pred_mean : pandas Series
         The predicted mean
-    conf_int : pandas DataFrame
-        A DataFrame with two columns, containing the lower and upper bound of
-        the each confidence interval respectively.
-    alpha : real number in (0, 1]
-        The alpha used to compute conf_int. Will be used only for the conf_int
-        trace name.
-    title : string
-        The plot title.
-    xaxis_title : string
-        The x axis title.
-    yaxis_title : string
-        The y axis title.
+    conf_int : pandas DataFrame, optional
+        If given, it must be a DataFrame with two columns, containing the lower and
+        upper bound of the confidence interval of each point.
+    alpha : real number in (0, 1], optional
+        The alpha that was used to compute ``conf_int``. Will be used only for the
+        name of the trace that shows the confidence interval.
+    title : str
+        The title of the plot.
+    xaxis_title : str
+        The title of the x axis.
+    yaxis_title : str
+        The title of the x axis.
 
     Returns
     -------
@@ -222,6 +222,40 @@ def plot_already_made_predictions(
         The resulting figure.
 
     """
+    if alpha is not None:
+        if conf_int is None:
+            raise ValueError(
+                "Received a value for α, but didn't receive the bounds of the "
+                "confidence interval."
+            )
+        if alpha <= 0 or alpha > 1:
+            raise ValueError("α must belong to the (0, 1] interval.")
+    if conf_int is not None:
+        if len(conf_int.columns) != 2:
+            raise ValueError(
+                "The data frame storing the bounds for the confidence intervals "
+                f"must have two columns, got {len(conf_int.columns)}."
+            )
+        if (conf_int[:, 0] > conf_int[:, 1]).any():
+            raise ValueError(
+                "The lower bound of each confidence interval must be equal or lower "
+                "to the corresponding upper bound."
+            )
+        if len(pred_mean) != len(conf_int):
+            raise ValueError(
+                "Received a diffent number of predictions and confidence intervals."
+            )
+        if (pred_mean.index != conf_int.index).any():
+            raise ValueError(
+                "The predictions series and the confidence intervals data frame must "
+                "have the same index."
+            )
+        if (conf_int[:, 0] > pred_mean).any() or (pred_mean > conf_int[:, 1]).any():
+            raise ValueError(
+                "Each prediction must lie inside the corresponding confidence "
+                "interval."
+            )
+
     fig = go.Figure()
     # displaying the test data
     fig.add_trace(go.Scatter(x=orig_data.index, y=orig_data.values, name="Data"))
@@ -237,7 +271,11 @@ def plot_already_made_predictions(
     # displaying the confidence interval and building the necessary objects
     if conf_int is not None:
         conf_int_shape = pd.concat((conf_int.iloc[:, 0], conf_int.iloc[::-1, 1]))
-        name = "Confidence interval at {}%".format(100 * alpha)
+        name = "Confidence interval at {}%"
+        if alpha is not None:
+            name = name.format(100 * alpha)
+        else:
+            name = name.format("?")
         fig.add_trace(
             go.Scatter(
                 x=conf_int_shape.index,
