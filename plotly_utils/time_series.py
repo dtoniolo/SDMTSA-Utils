@@ -1,4 +1,6 @@
+from typing import Union
 import numpy as np
+from numpy.typing import ArrayLike
 import pandas as pd
 import plotly
 import plotly.subplots
@@ -8,8 +10,15 @@ import scipy
 import scipy.stats
 
 
-def plot_ts(timeseries, lags, alpha=0.05, ci=False, title='', xaxis_title='',
-            yaxis_title=''):
+def plot_ts(
+  timeseries: Union[np.ndarray, pd.Series],
+  lags: Union[int, ArrayLike],
+  alpha: float = 0.05,
+  ci: bool = False,
+  title: str = '',
+  xaxis_title: str = '',
+  yaxis_title: str = ''
+) -> go.Figure:
     """Plots the timeseries and its ACF and PACF using Plotly.
 
     Parameters
@@ -20,7 +29,7 @@ def plot_ts(timeseries, lags, alpha=0.05, ci=False, title='', xaxis_title='',
         An int or array of lag values, used on horizontal axis. Uses
         np.arange(lags) when lags is an int. If not provided,
         lags=np.arange(len(corr)) is used.
-    alpha : real number in (0, 1]
+    alpha : real number in the interval :math:`(0, 1]`
         If a number is given, the confidence intervals for the given level are
         returned. For instance if alpha=.05, 95 % confidence intervals are
         returned where the standard deviation is computed according to
