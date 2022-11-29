@@ -1,4 +1,4 @@
-from typing import Union, Optional
+from typing import Any, Union, Optional
 import numpy as np
 from numpy.typing import ArrayLike
 import pandas as pd
@@ -14,7 +14,7 @@ def plot_ts(
     timeseries: Union[np.ndarray, pd.Series],
     lags: Union[int, ArrayLike],
     alpha: float = 0.05,
-    ci: bool = False,
+    plot_ci: bool = False,
     title: str = "",
     xaxis_title: str = "",
     yaxis_title: str = "",
@@ -34,9 +34,9 @@ def plot_ts(
         returned. For instance if alpha=.05, 95 % confidence intervals are
         returned where the standard deviation is computed according to
         Bartlett’s formula. If None, no confidence intervals are plotted.
-    ci : bool
-        Useful when plotting the residuals of a time series. Overlays to the
-        time series the std centered around zero.
+    plot_ci : bool
+        Useful when plotting the residuals of a time series. Overlays to the time
+        series the std centered around zero.
     title : string
         The plot title.
     xaxis_title : string
@@ -55,15 +55,15 @@ def plot_ts(
         rows=3, vertical_spacing=0.1, subplot_titles=["Data", "ACF", "PACF"]
     )
     # create data figure
-    if "index" not in timeseries.__dir__():
-        index = np.arange(timeseries.size)
-        values = timeseries
-        fig.add_trace(go.Scatter(x=index, y=values, name="Values"), row=1, col=1)
-    else:
+    if isinstance(timeseries, pd.Series):
         index = timeseries.index
         values = timeseries.values
         fig.add_trace(go.Scatter(x=index, y=values, name="Values"), row=1, col=1)
-    if ci:
+    else:
+        index = np.arange(timeseries.size)
+        values = timeseries
+        fig.add_trace(go.Scatter(x=index, y=values, name="Values"), row=1, col=1)
+    if plot_ci:
         # create 0 centered confidence interval at α confidence level
         ci = scipy.stats.norm.interval(alpha, scale=np.std(values))
         low_ci, high_ci = ci
@@ -132,14 +132,14 @@ def plot_ts(
 
 def make_and_plot_predictions(
     fitted_mod,
-    start_index=0,
-    end_index=None,
-    alpha=0.95,
-    title="",
-    xaxis_title="",
-    yaxis_title="",
-    pred_kwargs=None,
-):
+    start_index: int = 0,
+    end_index: Optional[int] = None,
+    alpha: float = 0.95,
+    title: str = "",
+    xaxis_title: str = "",
+    yaxis_title: str = "",
+    pred_kwargs: Optional[Any] = None,
+) -> go.Figure:
     """Plots one step ahead predictions for an univariate time series model.
 
     Parameters
@@ -149,17 +149,20 @@ def make_and_plot_predictions(
         on a subset, fit it, and then add test data without fitting
     start_index : natural number
         Zero indexed position at which to start the one step ahead predictions.
-    end_index : int
+    end_index : int, optional
         Optional. Zero indexed position at which to end the one step ahead
         predictions.
     alpha : real number in [0, 1)
         The probability amplitude of the confidence interval.
-    title : string
+    title : str
         The plot title.
-    xaxis_title : string
+    xaxis_title : str
         The x axis title.
-    yaxis_title : string
+    yaxis_title : str
         The y axis title.
+    pred_kwargs : Any, optional
+        If given, they will be passed to the ``get_predictions()`` method of
+        `fitted_mod`.
 
     Returns
     -------
