@@ -1,4 +1,4 @@
-from typing import Any, Union, Optional
+from typing import Any, Literal, Union, Optional
 import numpy as np
 from numpy.typing import ArrayLike
 import pandas as pd
@@ -18,6 +18,7 @@ def plot_ts(
     title: str = "",
     xaxis_title: str = "",
     yaxis_title: str = "",
+    missing: Union[Literal["raise"], Literal["conservative"]] = "raise",
 ) -> go.Figure:
     """Plots the timeseries and its ACF and PACF using Plotly.
 
@@ -43,6 +44,12 @@ def plot_ts(
         The x axis title.
     yaxis_title : string
         The y axis title.
+    missing : "raise" or "conservative"
+        If ``"raise"`` then an exception will be risen if NaN values are found,
+        otherwise ``"conservative"`` computes the autocovariance using nan-ops so that
+        nans are removed when computing the mean and cross-products that are used to
+        estimate the autocovariance. In the latter case, if NaN values are present the
+        PACF won't be plotted.
 
     Returns
     -------
@@ -51,8 +58,27 @@ def plot_ts(
 
     """
     # create subplots
+    if missing not in ["raise", "conservative"]:
+        raise TypeError(
+            "`missing` but be either 'raise' or 'conservative', got '{missing}'."
+        )
+    if isinstance(timeseries, np.ndarray):
+        has_nans = np.any(np.isnan(timeseries))
+    else:
+        has_nans = timeseries.isna().any()
+    if has_nans:
+        if missing == "raise":
+            raise ValueError(
+                "Found missing values in the input data, but there should be none."
+            )
+        plot_pacf = False
+        rows = 2
+    else:
+        plot_pacf = True
+        rows = 3
+
     fig = plotly.subplots.make_subplots(
-        rows=3, vertical_spacing=0.1, subplot_titles=["Data", "ACF", "PACF"]
+        rows=rows, vertical_spacing=0.1, subplot_titles=["Data", "ACF", "PACF"]
     )
     # create data figure
     if isinstance(timeseries, pd.Series):
@@ -83,7 +109,7 @@ def plot_ts(
         )
 
     # create acf subplot
-    acf, ci = stattools.acf(values, nlags=lags, fft=True, alpha=alpha)
+    acf, ci = stattools.acf(values, nlags=lags, fft=True, alpha=alpha, missing=missing)
     index = np.arange(acf.size)[1:]  # remove 0 lag
     acf = acf[1:]
     ci = ci[1:, :]
@@ -100,24 +126,29 @@ def plot_ts(
         col=1,
     )
 
-    # create pacf subplot
-    pacf, ci = stattools.pacf(values, nlags=lags, alpha=alpha)
-    pacf = pacf[1:]  # remove 0 lag
-    ci = ci[1:, :]
-    # center to 0
-    ci[:, 0] -= pacf
-    ci[:, 1] -= pacf
-    fig.add_trace(
-        go.Scatter(x=index, y=pacf, mode="markers", name="PACF"), row=3, col=1
-    )
-    ci_y = np.concatenate((ci[::, 0], ci[::-1, 1]))
-    name = "P" + name
-    fig.add_trace(
-        go.Scatter(x=comp_index, y=ci_y, fill="toself", opacity=0.5, name=name),
-        row=3,
-        col=1,
-    )
-    fig.update_layout(height=1100)
+    if plot_pacf:
+        # create pacf subplot
+        pacf, ci = stattools.pacf(values, nlags=lags, alpha=alpha)
+        pacf = pacf[1:]  # remove 0 lag
+        ci = ci[1:, :]
+        # center to 0
+        ci[:, 0] -= pacf
+        ci[:, 1] -= pacf
+        fig.add_trace(
+            go.Scatter(x=index, y=pacf, mode="markers", name="PACF"), row=3, col=1
+        )
+        ci_y = np.concatenate((ci[::, 0], ci[::-1, 1]))
+        name = "P" + name
+        fig.add_trace(
+            go.Scatter(x=comp_index, y=ci_y, fill="toself", opacity=0.5, name=name),
+            row=3,
+            col=1,
+        )
+        fig.update_layout(height=1100)
+        fig.update_layout({"xaxis3.matches": "x2"})
+        fig.update_layout({"yaxis3.matches": "y2"})
+    else:
+        fig.update_layout(height=800)
 
     # final layout changes
     fig.update_layout(title={"text": title, "x": 0.5, "xanchor": "center"})
@@ -125,8 +156,6 @@ def plot_ts(
     fig.update_xaxes(title="Lag", row=2, col=1)
     fig.update_xaxes(title="Lag", row=3, col=1)
     fig.update_yaxes(title=yaxis_title)
-    fig.update_layout({"xaxis3.matches": "x2"})
-    fig.update_layout({"yaxis3.matches": "y2"})
     return fig
 
 
