@@ -55,6 +55,12 @@ def plot_ts(
     -------
     fig : plotly figure
         The figure containing the three plots.
+    
+    Notes
+    -----
+    If `timeseries` is a Pandas series, then its index will be used for plotting.
+    Otherwise, a simple incremental index ranging from 1 to ``len(timeseries)``
+    (included) will be created.
 
     """
     # create subplots
