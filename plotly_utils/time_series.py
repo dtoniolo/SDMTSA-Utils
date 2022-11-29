@@ -250,7 +250,7 @@ def plot_already_made_predictions(
                 "The data frame storing the bounds for the confidence intervals "
                 f"must have two columns, got {len(conf_int.columns)}."
             )
-        if (conf_int[:, 0] > conf_int[:, 1]).any():
+        if (conf_int.iloc[:, 0] > conf_int.iloc[:, 1]).any():
             raise ValueError(
                 "The lower bound of each confidence interval must be equal or lower "
                 "to the corresponding upper bound."
