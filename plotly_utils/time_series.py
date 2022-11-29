@@ -180,7 +180,18 @@ def make_and_plot_predictions(
     pred_mean = pred.predicted_mean
     conf_int = pred.conf_int(alpha=alpha)
     # reconstruct data series
-    data = pd.Series(index=fitted_mod.data.dates, data=fitted_mod.data.endog)
+    if fitted_mod.data.dates is None:
+        if end_index is None:
+            end_index = len(fitted_mod.data.endog)
+        # plot index starting from 1
+        index = range(start_index + 1, end_index + 1)
+        pred_mean = pd.Series(index=index, data=pred_mean)
+        conf_int = pd.DataFrame(index=index, data=conf_int)
+        data = pd.Series(
+            index=range(1, len(fitted_mod.data.endog) + 1), data=fitted_mod.data.endog
+        )
+    else:
+        data = pd.Series(index=fitted_mod.data.dates, data=fitted_mod.data.endog)
     # make figure
     fig = plot_already_made_predictions(
         data, pred_mean, conf_int, alpha, title, xaxis_title, yaxis_title
