@@ -86,7 +86,8 @@ def plot_ts(
         values = timeseries.values
         fig.add_trace(go.Scatter(x=index, y=values, name="Values"), row=1, col=1)
     else:
-        index = np.arange(timeseries.size)
+        # make the index of the timeseries start from 1
+        index = np.arange(1, timeseries.size + 1)
         values = timeseries
         fig.add_trace(go.Scatter(x=index, y=values, name="Values"), row=1, col=1)
     if plot_ci:
