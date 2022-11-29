@@ -264,7 +264,9 @@ def plot_already_made_predictions(
                 "The predictions series and the confidence intervals data frame must "
                 "have the same index."
             )
-        if (conf_int[:, 0] > pred_mean).any() or (pred_mean > conf_int[:, 1]).any():
+        if (conf_int.iloc[:, 0] > pred_mean).any() or (
+            pred_mean > conf_int.iloc[:, 1]
+        ).any():
             raise ValueError(
                 "Each prediction must lie inside the corresponding confidence "
                 "interval."
