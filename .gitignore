@@ -1,3 +1,8 @@
+# files produced by the tests. They should get removed
+# when the tests are finished, but if something goes
+# wrong they might persist.
+actual_plot.png
+
 # macOS Finder files
 .DS_Store
 

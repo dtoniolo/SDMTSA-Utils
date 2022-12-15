@@ -55,7 +55,7 @@ def plot_ts(
     -------
     fig : plotly figure
         The figure containing the three plots.
-    
+
     Notes
     -----
     If `timeseries` is a Pandas series, then its index will be used for plotting.
@@ -182,7 +182,7 @@ def make_and_plot_predictions(
     ----------
     fitted_mod : time series fitted model
         Must include all the data, train and test. To do this, create a model
-        on a subset, fit it, and then add test data without fitting
+        on a subset, fit it, and then add test data without fitting.
     start_index : natural number
         Zero indexed position at which to start the one step ahead predictions.
     end_index : int, optional
@@ -332,6 +332,148 @@ def plot_already_made_predictions(
             go.Scatter(
                 x=conf_int_shape.index,
                 y=conf_int_shape.values,
+                fill="toself",
+                name=name,
+                opacity=0.5,
+                line={"color": "#E83D2E"},
+            )
+        )
+
+    # final layout changes
+    fig.update_layout(title={"text": title, "x": 0.5, "xanchor": "center"})
+    fig.update_xaxes(title=xaxis_title)
+    fig.update_yaxes(title=yaxis_title)
+    return fig
+
+
+def plot_n_steps_ahead_predictions(
+    orig_data: np.ndarray,
+    pred_mean: np.ndarray,
+    conf_int: np.ndarray,
+    alpha: Optional[float] = None,
+    title: str = "",
+    xaxis_title: str = "",
+    yaxis_title: str = "",
+) -> go.Figure:
+    """Plots already made n-steps-ahead predictions against the original data.
+
+
+    Parameters
+    ----------
+    orig_data : np.ndarray
+        Of shape (n_timesteps,) and floating point dtype. The array storing the
+        original data.
+    pred_mean : np.ndarray
+        Of shape (n_timesteps, n_steps_ahead) and floating point dtype. The array
+        storing the predicted means. Each row ``pred_mean[i]`` stores the
+        recurrent predictions made starting from the i-th timestamp included.
+    conf_int : np.ndarray
+        Of shape (n_timesteps, n_steps_ahead, 2) and floating point dtype. The
+        array storing the confidence intervals means. The third dimetion stores
+        the lower and upper bound respectively.
+    alpha : real number in (0, 1], optional
+        The alpha that was used to compute ``conf_int``. Will be used only for the
+        name of the trace that shows the confidence interval.
+    title : str
+        The title of the plot.
+    xaxis_title : str
+        The title of the x axis.
+    yaxis_title : str
+        The title of the x axis.
+
+    Returns
+    -------
+    fig : plotly figure
+        The resulting figure.
+
+    """
+    if orig_data.ndim != 1:
+        raise ValueError("The array storing the time series must be one-dimentional.")
+    if orig_data.shape[0] == 0:
+        raise ValueError("The array storing the time series is empty.")
+    if pred_mean.ndim != 2:
+        raise ValueError("The array storing the predictions must be two-dimentional.")
+    if pred_mean.shape[0] != orig_data.shape[0] or pred_mean.shape[0] == 0:
+        raise ValueError("The array storing the predictions has the wrong shape.")
+    if alpha is not None:
+        if conf_int is None:
+            raise ValueError(
+                "Received a value for α, but didn't receive the bounds of the "
+                "confidence interval."
+            )
+        if alpha <= 0 or alpha > 1:
+            raise ValueError("α must belong to the (0, 1] interval.")
+    if conf_int is not None:
+        if conf_int.shape != pred_mean.shape + (2,):
+            raise ValueError(
+                "The array storing the confidence intervals has the wrong shape."
+            )
+        if (conf_int[:, :, 0] > pred_mean).any() or (
+            pred_mean > conf_int[:, :, 1]
+        ).any():
+            raise ValueError(
+                "Each prediction must lie inside the corresponding confidence "
+                "interval."
+            )
+    n_timesteps = len(orig_data)
+    n_steps_ahead = pred_mean.shape[1]
+
+    fig = go.Figure()
+    # displaying the test data
+    fig.add_trace(go.Scatter(y=orig_data, name="Data"))
+    nans = np.full((n_timesteps, 1), dtype=pred_mean.dtype, fill_value=np.nan)
+    # need to flatten pred_mean and insert some nans in order to have breaks
+    # in the plot
+    flattened_pred_mean = np.concatenate((pred_mean, nans), axis=1).flatten()[:-1]
+    pred_mean_x = np.empty_like(flattened_pred_mean)
+    for timestep_idx in range(len(conf_int)):
+        start_idx = (n_steps_ahead + 1) * timestep_idx
+        end_idx = start_idx + n_steps_ahead
+        pred_mean_x[start_idx:end_idx] = np.arange(
+            timestep_idx, timestep_idx + n_steps_ahead
+        )
+        if timestep_idx != n_timesteps - 1:
+            pred_mean_x[end_idx] = np.nan
+    # displaying the predictions
+    fig.add_trace(
+        go.Scatter(
+            x=pred_mean_x,
+            y=flattened_pred_mean,
+            name="Estimates",
+            line={"color": "#E83D2E"},
+        )
+    )
+    # displaying the confidence interval and building the necessary objects
+    if conf_int is not None:
+        # need to flatten conf_int and insert some nans in order to have breaks
+        # in the plot
+        conf_int_x = np.empty((conf_int.size + n_timesteps - 1), dtype=conf_int.dtype)
+        conf_int_shape = conf_int_x.copy()
+        for timestep_idx in range(len(conf_int)):
+            start_idx = (2 * n_steps_ahead + 1) * timestep_idx
+            end_idx = start_idx + n_steps_ahead
+            conf_int_x[start_idx:end_idx] = np.arange(
+                timestep_idx, timestep_idx + n_steps_ahead
+            )
+            conf_int_shape[start_idx:end_idx] = conf_int[timestep_idx, :, 0]
+            start_idx = end_idx
+            end_idx += n_steps_ahead
+            conf_int_x[start_idx:end_idx] = np.arange(
+                timestep_idx + n_steps_ahead - 1, timestep_idx - 1, -1
+            )
+            conf_int_shape[start_idx:end_idx] = conf_int[timestep_idx, ::-1, 1]
+            if timestep_idx != n_timesteps - 1:
+                conf_int_x[end_idx] = np.nan
+                conf_int_shape[end_idx] = np.nan
+        name = "Confidence interval at {}%"
+        if alpha is not None:
+            name = name.format(100 * alpha)
+        else:
+            name = name.format("?")
+        fig.add_trace(
+            go.Scatter(
+                x=conf_int_x,
+                y=conf_int_shape,
                 fill="toself",
                 name=name,
                 opacity=0.5,
